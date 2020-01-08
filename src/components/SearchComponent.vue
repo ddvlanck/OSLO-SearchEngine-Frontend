@@ -10,63 +10,104 @@
                 <vl-column width="8" id="search_bar">
                     <vl-input-group>
                         <vl-button disabled>Zoek</vl-button>
-                        <vl-input-field id="map-address-03" name="map-address-03" mod-block/>
-                        <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search" text="Zoeken"/>
+                        <vl-input-field v-on:keyup.enter="executeQuery" v-model="query" id="inputfield" name="inputfield" mod-block/>
+                        <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
+                                        text="Zoeken"/>
                     </vl-input-group>
                 </vl-column>
-                <vl-column id="options">
+                <!--<vl-column id="options">
                         <vl-checkbox id="checkbox-ap" name="checkbox-ap" value="vocap">Vocabularium & Applicatieprofiel</vl-checkbox>
                         <vl-checkbox id="checkbox-class" name="checkbox-class" value="class" >Klasse</vl-checkbox>
                         <vl-checkbox id="checkbox-property" name="checkbox-property" value="property" >Eigenschap</vl-checkbox>
                         <vl-checkbox id="checkbox-doc" name="checkbox-name-doc" value="doc">Documentatie</vl-checkbox>
                         <vl-checkbox id="checkbox-context" name="checkbox-name-context" value="context">Context</vl-checkbox>
-                </vl-column>
+                </vl-column>-->
             </vl-grid>
         </vl-layout>
     </div>
 </template>
 
 <script>
+    const INDEX = "data.vlaanderen";
+    const TYPE = "url_list";
+
+    import EventBus from '../../eventbus.js';
+
+    let client = new elasticsearch.Client({
+        hosts: ['http://127.0.0.1:9200']
+    });
 
     export default {
         name: "SearchComponent",
         data() {
             return {
-
+                query: ''
             }
         },
-        methods : {
-            getCheckboxValues: function(){
-                document.querySelectorAll('input[type=checkbox]:checked').forEach( input => {
+        methods: {
+            getCheckboxValues: function () {
+                document.querySelectorAll('input[type=checkbox]:checked').forEach(input => {
                     console.log(input.value);
                 });
             },
-            executeQuery(){
-                // Get values of checked checkboxes
-                document.querySelectorAll('input[type=checkbox]:checked').forEach( input => {
-                    console.log(input.value);
-                });
+            executeQuery() {
+                const queryTerms = this.query.split(' ');
 
-                const data = new URLSearchParams();
-                data.append('query', 'PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n' +
-                    'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n' +
-                    'SELECT ?uri WHERE {\n' +
-                    '\t?uri rdfs:label "Persoon"@nl.\n' +
-                    '   filter(STRSTARTS(str(?uri),"https://data.vlaanderen.be")).\n' +
-                    '}');
-                fetch('https://data.vlaanderen.be/sparql', {
-                    method : 'POST',
-                    headers : {
-                        'Accept' : 'application/sparql-results+json'
-                    },
-                    body : data
-                }).then(res => res.json()).then(data => {
-                    console.log(data.results.bindings[0].uri.value);
-                })
+                let body = {
+                    size: 30,
+                    from: 0
+                };
+                if (queryTerms.length === 1) {
+                    body.query = {
+                        multi_match: {
+                            query: queryTerms[0],
+                            fields: ['keywords', 'type']
+                        }
+                    }
+
+                } else {
+                    let musts = [];
+
+                    queryTerms.forEach(term => {
+                        // Search in one field
+                        /*let match = {
+                            keywords: term
+                        }
+                        musts.push({match : match})
+                        */
+
+                        // Search in multiple field
+                        musts.push({multi_match : {query: term, fields: ['keywords', 'type']}})
+                    });
+
+                    /*body.query = {
+                        "bool" : musts
+                    }*/
+                    body.query = {
+                        "bool" : {
+                            "must" : musts
+                        }
+                    }
+                }
+
+                // Search the Elasticsearch passing in the index, query object and type
+                client.search({index: INDEX, body: body, type: TYPE})
+                    .then(results => {
+                        EventBus.$emit('results', results.hits.hits);
+                    })
+                    .catch(err => {
+                        console.log(err)
+                    });
+            },
+        },
+        watch: {
+            query: function () {
+                //this.executeQuery();
             }
         }
     }
 </script>
+
 
 <style lang="scss">
     @import "~@govflanders/vl-ui-core/src/scss/core";
@@ -87,10 +128,19 @@
         margin: auto;
     }
 
+    .vl-button {
+        border-bottom-left-radius: 10px;
+        border-top-left-radius: 10px;
+    }
+
     .vl-button:hover {
         background-color: #0055cc;
     }
 
+    .vl-input-addon {
+        border-bottom-right-radius: 10px;
+        border-top-right-radius: 10px;
+    }
 
 
 </style>

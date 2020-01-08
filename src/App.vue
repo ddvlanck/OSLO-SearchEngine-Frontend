@@ -3,16 +3,21 @@
     <vl-region>
       <SearchComponent></SearchComponent>
     </vl-region>
+    <vl-region>
+      <ResultComponent></ResultComponent>
+    </vl-region>
   </div>
 </template>
 
 <script>
 
 import SearchComponent from "./components/SearchComponent";
+import ResultComponent from "./components/ResultComponent";
 export default {
   name: 'app',
   components: {
-    SearchComponent
+    SearchComponent,
+    ResultComponent
   }
 }
 </script>
