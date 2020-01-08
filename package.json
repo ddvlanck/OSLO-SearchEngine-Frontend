@@ -24,6 +24,7 @@
     "node-sass": "^4.13.0",
     "sass-loader": "^8.0.0",
     "vue": "^2.6.10",
+    "vue-scrollto": "^2.17.1",
     "xml2js": "^0.4.23"
   },
   "devDependencies": {

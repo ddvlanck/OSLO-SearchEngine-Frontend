@@ -2,12 +2,17 @@
     <div>
         <vl-layout>
             <vl-grid mod-stacked>
-                <vl-column width="7" v-for="result in this.results">
+                <vl-column>
+                    <div id="resultTitle" class="vl-u-hr">
+                        <vl-title tag-name="h3">Resultaten ({{this.results.length}})</vl-title>
+                    </div>
+                </vl-column>
+                <vl-column width="8" v-for="result in this.results">
                     <vl-info-tile
                             :href= result.url
                             target="_blank"
                             :title= result.url
-                            v-bind:subtitle= "'Laatst aangepast op s' + result.lastmod">
+                            v-bind:subtitle= "'Laatst aangepast op ' + result.lastmod">
                             {{ result.type }}
                     </vl-info-tile>
                 </vl-column>
@@ -18,6 +23,15 @@
 
 <script>
     import EventBus from '../../eventbus.js';
+    const VueScrollTo = require('vue-scrollto');
+
+    let scrollOptions = {
+        container: '#resultTitle',
+        easing: 'ease-in',
+        offset: -60,
+        force: true,
+        cancelable: true,
+    }
 
     export default {
         name: "ResultComponent",
@@ -38,6 +52,12 @@
                     result.type = results[index]._source.type
                     this.results.push(result);
                 }
+
+                // TODO : test this
+                this.results.sort( (a,b) => (a.priority > b.priority) ? 1 : -1); // Sort according priority (correctness?)
+                this.results.sort( (a,b) => (a.url < b.url) ? -1 : (a.url > b.url) ? 1 : 0);
+
+                VueScrollTo.scrollTo('#resultTitle');
             }
         },
         mounted() {

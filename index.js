@@ -189,6 +189,9 @@ function createKeywords(url){
     // Main website has no other parts, so we define them ourselves
     if(url === 'https://data.vlaanderen.be/'){
         return ['data', 'vlaanderen', 'be'];
+    } else if(url === 'https://data.vlaanderen.be/ns'){
+        let keywords = url.replace('https://data.vlaanderen.be/', '').split('/');
+        keywords.push('vocabularium', 'applicatieprofiel');
     } else {
         return url.replace('https://data.vlaanderen.be/', '').split('/');
     }
