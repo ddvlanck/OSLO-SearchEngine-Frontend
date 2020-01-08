@@ -1,0 +1,37 @@
+{
+  "name": "oslo-search-engine",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "node index.js && vue-cli-service build"
+  },
+  "dependencies": {
+    "@govflanders/vl-ui-button": "^3.10.5",
+    "@govflanders/vl-ui-checkbox": "^3.10.5",
+    "@govflanders/vl-ui-content-header": "^3.10.5",
+    "@govflanders/vl-ui-core": "^3.10.5",
+    "@govflanders/vl-ui-form-message": "^3.10.5",
+    "@govflanders/vl-ui-input-field": "^3.10.5",
+    "@govflanders/vl-ui-input-group": "^3.10.5",
+    "@govflanders/vl-ui-titles": "^3.10.5",
+    "@govflanders/vl-ui-vue-components": "^3.10.3-beta.0",
+    "advanced-sitemap-generator": "^1.6.9",
+    "core-js": "^3.4.3",
+    "elasticsearch": "^16.5.0",
+    "fs": "0.0.1-security",
+    "node-sass": "^4.13.0",
+    "sass-loader": "^8.0.0",
+    "vue": "^2.6.10",
+    "xml2js": "^0.4.23"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "^4.1.0",
+    "@vue/cli-service": "^4.1.0",
+    "vue-template-compiler": "^2.6.10"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions"
+  ]
+}
