@@ -5,10 +5,17 @@ const xml2js = require('xml2js');
 const fs = require('fs');
 const Parser = new xml2js.Parser({attrkey: "ATTR"});
 const elasticsearch = require('elasticsearch');
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
+const getHrefs = require('get-hrefs');
 
-const INDEX = "data.vlaanderen";
-const TYPE = "url_list";
+const URL_INDEX = "data.vlaanderen";
+const FRAGMENT_IDENTIFIER_INDEX = "data.vlaanderen_fis";
+const URL_TYPE = "url_list";
+const FRAGMENT_IDENTIFIER_TYPE = "fragment_identifier_list";
 const ELASTICSEARCH_HOST = "http://localhost:9200";
+const INVALID_FRAGMENTS_IDENTIFIERS = ['#absclstract', '#sotd', '#license-and-liability', '#conformance-statement', '#overview', '#classes', '#properties', '#external',
+'#abstract', '#introduction', '#summary', '#status', '#license', '#conformance', '#overview'];
 
 // TODO
 // 1. Crawl web page of AP and vocs of adres en organisatie
@@ -19,33 +26,39 @@ try {
     const generator = createSitemapGenerator();
 
     generator.on('done', async () => {
+        console.log("DONE CRAWLING");
 
         // Index the sitemap
-        let indexed_data = await indexData();
+        let [indexed_urls, indexed_fis] = await indexData();
 
         // Create Elasticsearch client and an index
         const client = createElasticsearchClient();
+        createElasticsearchIndex(client, URL_INDEX);
+        createElasticsearchIndex(client, FRAGMENT_IDENTIFIER_INDEX);
 
-        if(!elasticsearchIndexExists(client, INDEX)){
-            createIndex(client);
-        }
 
         // Add data in bulk mode to Elasticsearch
-        addDataInBulk(client, indexed_data);
+        addDataInBulk(client, indexed_urls, URL_INDEX, URL_TYPE);
+        addDataInBulk(client, indexed_fis, FRAGMENT_IDENTIFIER_INDEX, FRAGMENT_IDENTIFIER_TYPE);
+
+        console.log("DONE INSERTING");
     });
 
     //generator.start();
+
+
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
 }
 
-function createElasticsearchClient(){
+
+function createElasticsearchClient() {
 
     console.log('\x1b[33m%s\x1b[0m ', "Creating an Elasticsearch client.");
 
     const client = new elasticsearch.Client({
-        hosts: [ ELASTICSEARCH_HOST ]
+        hosts: [ELASTICSEARCH_HOST]
     });
 
     console.log('\x1b[33m%s\x1b[0m ', "Pinging Elastichsearch client to be sure the service is running.");
@@ -53,7 +66,7 @@ function createElasticsearchClient(){
     // Ping the client to be sure Elasticsearch is up
     client.ping({
         requestTimeout: 30000,
-    }, function(error) {
+    }, function (error) {
         // At this point, eastic search is down, please check your Elasticsearch service
         if (error) {
             console.error('\x1b[31m%s\x1b[0m ', "Elasticsearch cluster is down")
@@ -65,27 +78,27 @@ function createElasticsearchClient(){
     return client;
 }
 
-function createIndex(client){
+function createElasticsearchIndex(client, name) {
     client.indices.create({
-        index: INDEX
+        index: name
     }, function (error, response, status) {
         if (error) {
             console.log(error);
         } else {
-            console.log("Created a new index: " + INDEX, response);
+            console.log("Created a new index: " + name, response);
         }
     });
 }
 
-function elasticsearchIndexExists(client, index){
+function elasticsearchIndexExists(client, index) {
     try {
         let exists = false;
 
         client.cat.indices({format: 'json'}).then(result => {
 
 
-            for(let i in result){
-                if(result[i].index === INDEX){
+            for (let i in result) {
+                if (result[i].index === index) {
                     exists = true;
                 }
             }
@@ -97,7 +110,7 @@ function elasticsearchIndexExists(client, index){
     }
 }
 
-function addDataInBulk(client, data){
+function addDataInBulk(client, data, index, type) {
 
     // Declare an empty array called bulk
     let bulk = [];
@@ -108,8 +121,8 @@ function addDataInBulk(client, data){
     data.forEach(url => {
         bulk.push({
             index: {
-                _index: INDEX,
-                _type: TYPE,
+                _index: index,
+                _type: type,
             }
         })
         bulk.push(url)
@@ -118,15 +131,15 @@ function addDataInBulk(client, data){
     //perform bulk indexing of the data passed
     client.bulk({body: bulk}, function (err, response) {
         if (err) {
-            console.log("Failed Bulk operation", err)
+            console.log("Failed Bulk operation ", err)
         } else {
-            console.log("Successfully imported", data.length);
+            console.log("Successfully imported ", data.length);
         }
     });
 
 }
 
-function createSitemapGenerator(){
+function createSitemapGenerator() {
 
     // Create sitemap generator for data.vlaanderen.be
     const generator = SitemapGenerator('https://data.vlaanderen.be', {
@@ -141,41 +154,102 @@ function createSitemapGenerator(){
     return generator;
 }
 
-async function indexData(){
-    let result = await new Promise(resolve => {
-        fs.readFile('./sitemap.xml', (err, xmlString) => {
+// This function reads all URLs from the sitemap_2.xml and executes 2 functions
+// 1 - A function to create a JSON object for the URL containing keywords, type, etc...
+// 2 - A function that gets all fragment identifiers from the HTML body
+async function indexData() {
+    let data = await new Promise(resolve => {
+        fs.readFile('./sitemap_2.xml',  (err, xmlString) => {
             if (err) {
-                console.error('Error reading the sitemap.xml file');
+                console.error('Error reading the sitemap_2.xml file');
             }
-
-            let indexMap = [];
-
             Parser.parseString(xmlString.toString(), (err, res) => {
                 if (err) {
                     console.error(err);
                 }
 
-                for (let index in res.urlset.url) {
-                    let object = {};
-                    object.url = res.urlset.url[index].loc[0];
-                    object.keywords = createKeywords(object.url);
-                    object.priority = res.urlset.url[index].priority[0];
-                    object.lastmod = res.urlset.url[index].lastmod[0];
-                    object.type = urlType(object.url);
-                    indexMap.push(object);
-                }
-            });
+                resolve(res);
 
-            resolve(indexMap);
+            });
         });
     });
 
-    // Write data to a file
-    //fs.writeFileSync('index.json', JSON.stringify(result, null, 4));
+    let indexedURLs = convertURLsToJSON(data.urlset.url);
+    let indexedFIs = await getFragmentIdentifiers(data.urlset.url);
 
-    // Or return JSON data immediately
-    return result;
+    return [indexedURLs, indexedFIs];
 }
+
+function convertURLsToJSON(urls) {
+    let indexedURLs = [];
+    for (let index in urls) {
+
+        // Create JSON objects for the sitemap_2.xml
+        let object = {};
+        object.url = urls[index].loc[0];
+        object.keywords = createKeywords(object.url);
+        object.priority = urls[index].priority[0];
+        object.lastmod = urls[index].lastmod[0];
+        object.type = urlType(object.url);
+        indexedURLs.push(object);
+
+    }
+    return indexedURLs
+}
+
+// TODO:
+// Get all fragment identifiers for the current URL
+//const fragmentIdentifiersForCurrentURL = await getFragmentIdentifiersForURL(res.urlset.url[index].loc[0]);
+//indexFIs = indexFIs.concat(fragmentIdentifiersForCurrentURL);
+async function getFragmentIdentifiers(urls){
+    let FIs = [];
+    for(let index in urls){
+        let FI = await getFragmentIdentifiersForURL(urls[index].loc[0]);
+        FIs = FIs.concat(FI);
+    }
+    return FIs;
+}
+
+
+async function getFragmentIdentifiersForURL(url) {
+    let html = await fetch(url).then(res => {
+        return res.text()
+    });
+    let hrefs = getHrefs(html);
+    hrefs = hrefs.filter(href => href.indexOf('#') === 0);  // Only keep fragment identifiers from this URL. (not those who refer to another domain);
+
+    let fragmentIdentifiers = [];
+
+    hrefs.forEach(link => {
+
+        let isProperty = false;
+        if (link.charAt(1) == link.charAt(1).toLowerCase() || link.indexOf('.') >= 0) {
+            isProperty = true;
+        }
+
+        if (!INVALID_FRAGMENTS_IDENTIFIERS.includes(link)) {
+            let keywords = link.substring(1, link.length).split('.');
+
+            let type;
+            if(link.indexOf('jsonld') >= 0){
+                type = 'Context';
+            } else {
+                type = isProperty ? 'Eigenschap' : 'Klasse';
+            }
+            keywords.push(type);
+
+            fragmentIdentifiers.push(
+                {
+                    url: url + link,
+                    keywords: keywords,
+                    type: type
+                })
+        }
+    });
+
+    return fragmentIdentifiers;
+}
+
 
 /*
 * //////////////////////
@@ -184,12 +258,12 @@ async function indexData(){
 * */
 
 
-function createKeywords(url){
+function createKeywords(url) {
     // Remove the base domain and use other parts as keywords
     // Main website has no other parts, so we define them ourselves
-    if(url === 'https://data.vlaanderen.be/'){
+    if (url === 'https://data.vlaanderen.be/') {
         return ['data', 'vlaanderen', 'be'];
-    } else if(url === 'https://data.vlaanderen.be/ns'){
+    } else if (url === 'https://data.vlaanderen.be/ns') {
         let keywords = url.replace('https://data.vlaanderen.be/', '').split('/');
         keywords.push('vocabularium', 'applicatieprofiel');
     } else {
@@ -198,27 +272,27 @@ function createKeywords(url){
 
 }
 
-function urlType(url){
+function urlType(url) {
     let type = null;
 
-    if(url.indexOf('/applicatieprofiel') >= 0){
+    if (url.indexOf('/applicatieprofiel') >= 0) {
         type = "Applicatieprofiel"
-    } else if(url.indexOf('/ns') >= 0){
+    } else if (url.indexOf('/ns') >= 0) {
         type = "Vocabularium"
-    } else if(url.indexOf('/conceptscheme') >= 0){
+    } else if (url.indexOf('/conceptscheme') >= 0) {
         type = "Codelijst"
-    } else if(url.indexOf('/concept/') >= 0) {
+    } else if (url.indexOf('/concept/') >= 0) {
         type = "Waarde van een codelijst"
     } else {
         type = "Pagina of document";
     }
 
     // Specific web pages
-    if(url === 'https://data.vlaanderen.be/'){
+    if (url === 'https://data.vlaanderen.be/') {
         type = "Hoofdpagina"
-    } else if(url === 'https://data.vlaanderen.be/dumps'){
+    } else if (url === 'https://data.vlaanderen.be/dumps') {
         type = "Data dumps";
-    } else if(url === 'https://data.vlaanderen.be/ns'){
+    } else if (url === 'https://data.vlaanderen.be/ns') {
         type = "Namespace met alle vocabularia en applicatieprofielen";
     }
 
