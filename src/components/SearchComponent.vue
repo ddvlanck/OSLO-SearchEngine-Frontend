@@ -9,27 +9,22 @@
                 </vl-column>
                 <vl-column width="8" id="search_bar">
                     <vl-input-group>
-                        <vl-button disabled>Zoek</vl-button>
+                        <vl-button disabled>Termen:</vl-button>
                         <vl-input-field v-on:keyup.enter="executeQuery" v-model="query" id="inputfield" name="inputfield" mod-block/>
                         <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
                                         text="Zoeken"/>
                     </vl-input-group>
                 </vl-column>
-                <!--<vl-column id="options">
-                        <vl-checkbox id="checkbox-ap" name="checkbox-ap" value="vocap">Vocabularium & Applicatieprofiel</vl-checkbox>
-                        <vl-checkbox id="checkbox-class" name="checkbox-class" value="class" >Klasse</vl-checkbox>
-                        <vl-checkbox id="checkbox-property" name="checkbox-property" value="property" >Eigenschap</vl-checkbox>
-                        <vl-checkbox id="checkbox-doc" name="checkbox-name-doc" value="doc">Documentatie</vl-checkbox>
-                        <vl-checkbox id="checkbox-context" name="checkbox-name-context" value="context">Context</vl-checkbox>
-                </vl-column>-->
             </vl-grid>
         </vl-layout>
     </div>
 </template>
 
 <script>
-    const INDEX = "data.vlaanderen";
-    const TYPE = "url_list";
+    const URL_INDEX = "data.vlaanderen";
+    const FRAGMENT_IDENTIFIER_INDEX = "data.vlaanderen_fis";
+    const URL_TYPE = "url_list";
+    const FRAGMENT_IDENTIFIER_TYPE = "fragment_identifier_list";
 
     import EventBus from '../../eventbus.js';
 
@@ -45,11 +40,6 @@
             }
         },
         methods: {
-            getCheckboxValues: function () {
-                document.querySelectorAll('input[type=checkbox]:checked').forEach(input => {
-                    console.log(input.value);
-                });
-            },
             executeQuery() {
                 const queryTerms = this.query.split(' ');
 
@@ -58,46 +48,78 @@
                     from: 0
                 };
                 if (queryTerms.length === 1) {
-                    body.query = {
+                    /*body.query = {
                         multi_match: {
                             query: queryTerms[0],
-                            fields: ['keywords', 'type']
+                            fields: ['keywords', 'type'],
+                            fuzziness: "AUTO"
+                        }
+                    }*/
+                    body.query = {
+                        "query_string" : {
+                            "query" : queryTerms[0] + '*',
+                            "fields" : ["keywords", "type"]
                         }
                     }
 
                 } else {
-                    let musts = [];
+                    //let musts = [];
+                    let query = "";
+                    queryTerms.forEach( term => {
+                        if(term === queryTerms[queryTerms.length-1]){
+                            query += '(' + term + '*)';
+                        } else {
+                            query += '(' + term + '*) AND ';
+                        }
 
-                    queryTerms.forEach(term => {
+                    });
+
+                    body.query = {
+                        "query_string" : {
+                            query: query,
+                            fields: ['keywords', 'type']
+                        }
+                    }
+                    /*queryTerms.forEach(term => {
                         // Search in one field
-                        /*let match = {
+                        let match = {
                             keywords: term
                         }
                         musts.push({match : match})
-                        */
+
 
                         // Search in multiple field
                         musts.push({multi_match : {query: term, fields: ['keywords', 'type']}})
-                    });
+                    });*/
 
                     /*body.query = {
                         "bool" : musts
                     }*/
-                    body.query = {
+                    /*body.query = {
                         "bool" : {
                             "must" : musts
                         }
-                    }
+                    }*/
+
                 }
 
-                // Search the Elasticsearch passing in the index, query object and type
-                client.search({index: INDEX, body: body, type: TYPE})
+                // Search Elasticsearch URL index
+                client.search({index: URL_INDEX, body: body, type: URL_TYPE})
                     .then(results => {
-                        EventBus.$emit('results', results.hits.hits);
+                        EventBus.$emit('url_results', results.hits.hits);
                     })
                     .catch(err => {
                         console.log(err)
                     });
+
+                // Search Elasticsearch fragment index
+                client.search({index: FRAGMENT_IDENTIFIER_INDEX, body: body, type: FRAGMENT_IDENTIFIER_TYPE})
+                    .then(results => {
+                        EventBus.$emit('fragment_identifier_results', results.hits.hits);
+                    })
+                    .catch(err => {
+                        console.log(err);
+                    })
             },
         },
         watch: {

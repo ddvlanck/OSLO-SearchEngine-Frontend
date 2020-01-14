@@ -17,7 +17,9 @@ import {
   VlButton,
   VlFormMessage,
   VlCheckbox,
-  VlInfoTile
+  VlInfoTile,
+  VlTabs,
+  VlTab
 } from '@govflanders/vl-ui-vue-components';
 
 Vue.component('vl-title', VlTitle);
@@ -32,6 +34,8 @@ Vue.component('vl-button', VlButton);
 Vue.component('vl-form-message', VlFormMessage);
 Vue.component('vl-checkbox', VlCheckbox);
 Vue.component('vl-info-tile', VlInfoTile);
+Vue.component('vl-tabs', VlTabs);
+Vue.component('vl-tab', VlTab);
 
 Vue.use(VlCore);
 Vue.use(VlUtil);
