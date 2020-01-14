@@ -12,21 +12,33 @@ const getHrefs = require('get-hrefs');
 const URL_INDEX = "data.vlaanderen";
 const FRAGMENT_IDENTIFIER_INDEX = "data.vlaanderen_fis";
 const URL_TYPE = "url_list";
-const FRAGMENT_IDENTIFIER_TYPE = "fragment_identifier_list";
+const FRAGMENT_IDENTIFIER_TYPE = "fi_list";
 const ELASTICSEARCH_HOST = "http://localhost:9200";
 const INVALID_FRAGMENTS_IDENTIFIERS = ['#absclstract', '#sotd', '#license-and-liability', '#conformance-statement', '#overview', '#classes', '#properties', '#external',
 '#abstract', '#introduction', '#summary', '#status', '#license', '#conformance', '#overview'];
 
 // TODO
 // 1. Crawl web page of AP and vocs of adres en organisatie
-// 2. Finish try-catch
-// 3. Add CRON job
+// 2. Add CRON job
+// 3. Find way to push new URLs to Elasticsearch
 
-try {
+/*try {
+    setup();
+} catch (e) {
+    console.error('Something went wrong!');
+    console.log(e);
+}*/
+
+/*
+*
+* This function is executed the first time the application is started.
+* A sitemap is generated, Elasticsearch indices are created and data is pushed to the engine
+*
+* */
+function setup(){
     const generator = createSitemapGenerator();
 
     generator.on('done', async () => {
-        console.log("DONE CRAWLING");
 
         // Index the sitemap
         let [indexed_urls, indexed_fis] = await indexData();
@@ -41,20 +53,23 @@ try {
         addDataInBulk(client, indexed_urls, URL_INDEX, URL_TYPE);
         addDataInBulk(client, indexed_fis, FRAGMENT_IDENTIFIER_INDEX, FRAGMENT_IDENTIFIER_TYPE);
 
-        console.log("DONE INSERTING");
     });
 
     //generator.start();
+}
 
+// TODO
+function update(){
 
-} catch (e) {
-    console.error('Something went wrong!');
-    console.log(e);
 }
 
 
+/*
+*
+* Called in the main method and CRON job to create an Elasticsearch client
+*
+* */
 function createElasticsearchClient() {
-
     console.log('\x1b[33m%s\x1b[0m ', "Creating an Elasticsearch client.");
 
     const client = new elasticsearch.Client({
@@ -78,6 +93,11 @@ function createElasticsearchClient() {
     return client;
 }
 
+/*
+* Creates an index in Elasticsearch
+* @params {client} :  an Elasticsearch client
+* @params {name} : the name of the index
+* */
 function createElasticsearchIndex(client, name) {
     client.indices.create({
         index: name
@@ -110,12 +130,19 @@ function elasticsearchIndexExists(client, index) {
     }
 }
 
+/*
+* Pushes data in bulk mode to the Elasticsearch engine
+* @params {client} : an Elasticsearch client
+* @params {data} : array with JSON objects
+* @params {index} : index where data will be stored
+* @params {type} : type of the data
+* */
 function addDataInBulk(client, data, index, type) {
 
     // Declare an empty array called bulk
     let bulk = [];
 
-    // Loop through each city and create and push two objects into the array in each loop
+    // Loop through each URL and create and push two objects into the array in each loop
     // first object sends the index and type you will be saving the data as
     // second object is the data you want to index
     data.forEach(url => {
@@ -126,9 +153,9 @@ function addDataInBulk(client, data, index, type) {
             }
         })
         bulk.push(url)
-    })
+    });
 
-    //perform bulk indexing of the data passed
+    // Perform bulk indexing of the data passed
     client.bulk({body: bulk}, function (err, response) {
         if (err) {
             console.log("Failed Bulk operation ", err)
@@ -139,12 +166,18 @@ function addDataInBulk(client, data, index, type) {
 
 }
 
+/*
+*
+* Creates a generator instance to create a sitemap.xml file
+*
+* */
 function createSitemapGenerator() {
 
     // Create sitemap generator for data.vlaanderen.be
     const generator = SitemapGenerator('https://data.vlaanderen.be', {
         stripQuerystring: true,
         ignoreHreflang: true,
+        filepath: './sitemap.xml',
         changeFreq: 'monthly',
         excludeURLs: ['adres', 'organisatie']   // Which patterns should be excluded
     });
@@ -154,14 +187,19 @@ function createSitemapGenerator() {
     return generator;
 }
 
-// This function reads all URLs from the sitemap_2.xml and executes 2 functions
-// 1 - A function to create a JSON object for the URL containing keywords, type, etc...
-// 2 - A function that gets all fragment identifiers from the HTML body
+
+/*
+*
+* Reads all URLs from the sitemap.xml file and executes two functions.
+* The first function converts to URLs to JSON objects with metadata.
+* The second function gets all the fragment identifiers present in the HTML body of the URL
+*
+* */
 async function indexData() {
     let data = await new Promise(resolve => {
-        fs.readFile('./sitemap_2.xml',  (err, xmlString) => {
+        fs.readFile('./sitemap.xml',  (err, xmlString) => {
             if (err) {
-                console.error('Error reading the sitemap_2.xml file');
+                console.error('Error reading the sitemap.xml file');
             }
             Parser.parseString(xmlString.toString(), (err, res) => {
                 if (err) {
@@ -180,11 +218,15 @@ async function indexData() {
     return [indexedURLs, indexedFIs];
 }
 
+/*
+* Converts URLs to JSON objects with metadata
+* @params {urls}: list of objects containing the URLs (output from XML converter)
+* */
 function convertURLsToJSON(urls) {
     let indexedURLs = [];
     for (let index in urls) {
 
-        // Create JSON objects for the sitemap_2.xml
+        // Create JSON objects for the sitemap.xml
         let object = {};
         object.url = urls[index].loc[0];
         object.keywords = createKeywords(object.url);
@@ -197,10 +239,12 @@ function convertURLsToJSON(urls) {
     return indexedURLs
 }
 
-// TODO:
-// Get all fragment identifiers for the current URL
-//const fragmentIdentifiersForCurrentURL = await getFragmentIdentifiersForURL(res.urlset.url[index].loc[0]);
-//indexFIs = indexFIs.concat(fragmentIdentifiersForCurrentURL);
+/*
+*
+* Gets all fragment identifiers for the list of URLs
+* @params {urls}: list of objects containing the URLs (output from XML converter)
+*
+* */
 async function getFragmentIdentifiers(urls){
     let FIs = [];
     for(let index in urls){
@@ -210,7 +254,12 @@ async function getFragmentIdentifiers(urls){
     return FIs;
 }
 
-
+/*
+*
+* Actual function that retrieves the fragment identifiers present in the HTML body of the URL
+* Creates an array of JSON objects containing the fragment identifier and information about the identifier.
+* @params {url} : a URL
+* */
 async function getFragmentIdentifiersForURL(url) {
     let html = await fetch(url).then(res => {
         return res.text()
@@ -220,29 +269,57 @@ async function getFragmentIdentifiersForURL(url) {
 
     let fragmentIdentifiers = [];
 
-    hrefs.forEach(link => {
+    hrefs.forEach(fi => {
+
+        // Remove any hexidecimal signs (%3A is a [point]. %20 represents a space and can not be removed in the URL. However, for the keywords, it will be removed)
+        fi = fi.replace('%3A', '.');
 
         let isProperty = false;
-        if (link.charAt(1) == link.charAt(1).toLowerCase() || link.indexOf('.') >= 0) {
+        // Term is a property if it starts with lowercase or a point occurs in the string
+        if (fi.charAt(1) == fi.charAt(1).toLowerCase() || fi.indexOf('.') >= 0) {
             isProperty = true;
         }
 
-        if (!INVALID_FRAGMENTS_IDENTIFIERS.includes(link)) {
-            let keywords = link.substring(1, link.length).split('.');
+        if (!INVALID_FRAGMENTS_IDENTIFIERS.includes(fi)) {
+            // Get name of the term
+            let name = fi.split('.').length > 1 ? fi.substr(fi.indexOf('.')+1,fi.length) : fi.substr(1, fi.length);
+            name = name.replace('%20', ' ');
 
+            // Generate keywords that will be queried
+            const keywords = fi.replace('%20', ' ').substring(1, fi.length).split('.');
+
+            // Determine type of term
             let type;
-            if(link.indexOf('jsonld') >= 0){
+            if(fi.indexOf('jsonld') >= 0){
                 type = 'Context';
+
+                //If FI is jsonld context, it means the URL is of an applicationprofile (AP)
+                // So we add the name of the AP
+                let apName = url.substring(url.indexOf('applicatieprofiel')+18, url.length-1);
+                keywords.push(apName);
+
+                // We also change the name of the object (otherwise its name will be 'jsonld')
+                name = 'JSON-LD context van ' + apName;
+
             } else {
                 type = isProperty ? 'Eigenschap' : 'Klasse';
             }
-            keywords.push(type);
+
+            // If we have a JSON-LD context, we need to construct the proper URL for it
+            // Otherwise we construct the regular URL by preceding the FI with https://data.vlaanderen.be/...
+            let URL;
+            if(type === 'Context'){
+                URL = 'https://data.vlaanderen.be/context/' + keywords[keywords.length-1] + '.jsonld';
+            } else {
+                URL = url + fi; // 'url' is the parameter of the function
+            }
 
             fragmentIdentifiers.push(
                 {
-                    url: url + link,
+                    url: URL,
                     keywords: keywords,
-                    type: type
+                    type: type,
+                    name: name
                 })
         }
     });
@@ -250,14 +327,12 @@ async function getFragmentIdentifiersForURL(url) {
     return fragmentIdentifiers;
 }
 
-
 /*
-* //////////////////////
-* Small helper functions
-* //////////////////////
+*
+* Creates the keywords for the URL that will be pushed to Elasticsearch
+* @param {url}: a URL
+*
 * */
-
-
 function createKeywords(url) {
     // Remove the base domain and use other parts as keywords
     // Main website has no other parts, so we define them ourselves
@@ -272,6 +347,12 @@ function createKeywords(url) {
 
 }
 
+/*
+*
+* Determines the type of the URL and will be added as metadata to the corresponding JSON object
+* @param {url}: a URL
+*
+* */
 function urlType(url) {
     let type = null;
 
