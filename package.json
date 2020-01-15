@@ -25,10 +25,10 @@
     "fs": "0.0.1-security",
     "get-hrefs": "^4.0.0",
     "isomorphic-fetch": "^2.2.1",
+    "node-cron": "^2.0.3",
     "node-sass": "^4.13.0",
     "sass-loader": "^8.0.0",
     "vue": "^2.6.10",
-    "vue-scrollto": "^2.17.1",
     "xml2js": "^0.4.23"
   },
   "devDependencies": {

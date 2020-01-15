@@ -8,31 +8,25 @@ const elasticsearch = require('elasticsearch');
 require('es6-promise').polyfill();
 require('isomorphic-fetch');
 const getHrefs = require('get-hrefs');
+const cron = require("node-cron");
 
-const URL_INDEX = "data.vlaanderen";
-const FRAGMENT_IDENTIFIER_INDEX = "data.vlaanderen_fis";
-const URL_TYPE = "url_list";
-const FRAGMENT_IDENTIFIER_TYPE = "fi_list";
-const ELASTICSEARCH_HOST = "http://localhost:9200";
-const INVALID_FRAGMENTS_IDENTIFIERS = ['#absclstract', '#sotd', '#license-and-liability', '#conformance-statement', '#overview', '#classes', '#properties', '#external',
-'#abstract', '#introduction', '#summary', '#status', '#license', '#conformance', '#overview'];
-
-// TODO
-// 1. Crawl web page of AP and vocs of adres en organisatie
-// 2. Add CRON job
-// 3. Find way to push new URLs to Elasticsearch
+const config = require('./config.js');
 
 //TODO
-// Do some tests with the update api to see what works and what not.
-//
+// 1. Crawl web page of AP and vocs of adres en organisatie
+
 
 try {
-    update();
+    setup();
+    // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
+    //cron.schedule("0 0 1 */1 *", function() {
+    //    update();
+    //});
+
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
 }
-
 
 
 /*
@@ -41,8 +35,8 @@ try {
 * A sitemap is generated, Elasticsearch indices are created and data is pushed to the engine
 *
 * */
-function setup(){
-    const generator = createSitemapGenerator();
+function setup() {
+    const generator = createSitemapGenerator(config.ORIGINAL_SITEMAP);
 
     generator.on('done', async () => {
 
@@ -51,17 +45,17 @@ function setup(){
 
         // Create Elasticsearch client and an index
         const client = createElasticsearchClient();
-        createElasticsearchIndex(client, URL_INDEX);
-        createElasticsearchIndex(client, FRAGMENT_IDENTIFIER_INDEX);
+        createElasticsearchIndex(client, config.URL_INDEX);
+        createElasticsearchIndex(client, config.FRAGMENT_IDENTIFIER_INDEX);
 
 
         // Add data in bulk mode to Elasticsearch
-        addDataInBulk(client, indexed_urls, URL_INDEX, URL_TYPE);
-        addDataInBulk(client, indexed_fis, FRAGMENT_IDENTIFIER_INDEX, FRAGMENT_IDENTIFIER_TYPE);
+        addDataInBulk(client, indexed_urls, config.URL_INDEX, config.URL_TYPE);
+        addDataInBulk(client, indexed_fis, config.FRAGMENT_IDENTIFIER_INDEX, config.FRAGMENT_IDENTIFIER_TYPE);
 
     });
 
-    //generator.start();
+    generator.start();
 }
 
 /*
@@ -70,15 +64,20 @@ function setup(){
 * It starts the sitemap generator, compares the old and new sitemap en pushes new URLs to Elasticsearch.
 *
 * */
-//TODO
-async function update(){
-    const newURLs = await compareToOriginalSiteMap();
-    const newIndexedURLs = convertURLsToJSON(newURLs);
-    const newIndexedFIs = await getFragmentIdentifiers(newURLs);
+async function update() {
+    const generator = createSitemapGenerator(config.UPDATE_SITEMAP);
 
-    const client = createElasticsearchClient();
-    addDataInBulk(client, newIndexedURLs, URL_INDEX, URL_TYPE);
-    addDataInBulk(client, newIndexedFIs, FRAGMENT_IDENTIFIER_INDEX, FRAGMENT_IDENTIFIER_TYPE);
+    generator.on('done', async () => {
+        const newURLs = await compareToOriginalSiteMap();
+        const newIndexedURLs = convertURLsToJSON(newURLs);
+        const newIndexedFIs = await getFragmentIdentifiers(newURLs);
+
+        const client = createElasticsearchClient();
+        addDataInBulk(client, newIndexedURLs, config.URL_INDEX, config.URL_TYPE);
+        addDataInBulk(client, newIndexedFIs, config.FRAGMENT_IDENTIFIER_INDEX, config.FRAGMENT_IDENTIFIER_TYPE);
+    });
+
+    generator.start();
 }
 
 /*
@@ -87,11 +86,11 @@ async function update(){
 * New sitemap overrides old sitemap.
 *
 * */
-async function compareToOriginalSiteMap(){
+async function compareToOriginalSiteMap() {
 
     // Read original sitemap
     let originalURLs = await new Promise(resolve => {
-        fs.readFile('./sitemap.xml',  (err, xmlString) => {
+        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
             if (err) {
                 console.error('Error reading the sitemap.xml file');
             }
@@ -109,7 +108,7 @@ async function compareToOriginalSiteMap(){
 
     // Read new sitemap
     let update = await new Promise(resolve => {
-        fs.readFile('./sitemap-update.xml',  (err, xmlString) => {
+        fs.readFile(config.UPDATE_SITEMAP, (err, xmlString) => {
             if (err) {
                 console.error('Error reading the sitemap.xml file');
             }
@@ -126,14 +125,17 @@ async function compareToOriginalSiteMap(){
 
     // Compare two sitemaps so that we only have to push new URLs to Elasticsearch
     let newURLs = [];
-    update.urlset.url.forEach( url => {
-        if(!originalURLs.includes(url.loc[0])){
+    update.urlset.url.forEach(url => {
+        if (!originalURLs.includes(url.loc[0])) {
             newURLs.push(url);
         }
     });
 
     // Write contents of new sitemap to the original, so it becomes the new original.
-    fs.createReadStream('./sitemap-update.xml').pipe(fs.createWriteStream('./sitemap.xml'));
+    fs.createReadStream(config.UPDATE_SITEMAP).pipe(fs.createWriteStream(config.ORIGINAL_SITEMAP));
+
+    // Delete the sitemap-update.xml file
+    //fs.unlinkSync('./sitemap-update.xml');
 
     return newURLs;
 }
@@ -148,7 +150,7 @@ function createElasticsearchClient() {
     console.log('\x1b[33m%s\x1b[0m ', "Creating an Elasticsearch client.");
 
     const client = new elasticsearch.Client({
-        hosts: [ELASTICSEARCH_HOST]
+        hosts: [config.ELASTICSEARCH_HOST]
     });
 
     console.log('\x1b[33m%s\x1b[0m ', "Pinging Elastichsearch client to be sure the service is running.");
@@ -246,13 +248,13 @@ function addDataInBulk(client, data, index, type) {
 * Creates a generator instance to create a sitemap.xml file
 *
 * */
-function createSitemapGenerator() {
+function createSitemapGenerator(filename) {
 
     // Create sitemap generator for data.vlaanderen.be
     const generator = SitemapGenerator('https://data.vlaanderen.be', {
         stripQuerystring: true,
         ignoreHreflang: true,
-        filepath: './sitemap-update.xml',
+        filepath: filename,
         changeFreq: 'monthly',
         excludeURLs: ['adres', 'organisatie']   // Which patterns should be excluded
     });
@@ -272,7 +274,7 @@ function createSitemapGenerator() {
 * */
 async function indexData() {
     let data = await new Promise(resolve => {
-        fs.readFile('./sitemap.xml',  (err, xmlString) => {
+        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
             if (err) {
                 console.error('Error reading the sitemap.xml file');
             }
@@ -320,9 +322,9 @@ function convertURLsToJSON(urls) {
 * @params {urls}: list of objects containing the URLs (output from XML converter)
 *
 * */
-async function getFragmentIdentifiers(urls){
+async function getFragmentIdentifiers(urls) {
     let FIs = [];
-    for(let index in urls){
+    for (let index in urls) {
         let FI = await getFragmentIdentifiersForURL(urls[index].loc[0]);
         FIs = FIs.concat(FI);
     }
@@ -346,31 +348,32 @@ async function getFragmentIdentifiersForURL(url) {
 
     hrefs.forEach(fi => {
 
-        // Remove any hexidecimal signs (%3A is a [point]. %20 represents a space and can not be removed in the URL. However, for the keywords, it will be removed)
-        fi = fi.replace('%3A', '.');
+        if (!config.INVALID_FRAGMENTS_IDENTIFIERS.includes(fi)) {
+            // Remove any hexidecimal signs (%3A is a [point]. %20 represents a space and can not be removed in the URL. However, for the keywords, it will be removed)
+            const fi_pretty = fi.replace('%3A', '.');
 
-        let isProperty = false;
-        // Term is a property if it starts with lowercase or a point occurs in the string
-        if (fi.charAt(1) == fi.charAt(1).toLowerCase() || fi.indexOf('.') >= 0) {
-            isProperty = true;
-        }
+            // Determine if the fragment identifier points to a property, class (or json-ld context)
+            let isProperty = false;
+            // Term is a property if it starts with lowercase or a point occurs in the string
+            if (fi_pretty.charAt(1) == fi_pretty.charAt(1).toLowerCase() || fi_pretty.indexOf('.') >= 0) {
+                isProperty = true;
+            }
 
-        if (!INVALID_FRAGMENTS_IDENTIFIERS.includes(fi)) {
             // Get name of the term
-            let name = fi.split('.').length > 1 ? fi.substr(fi.indexOf('.')+1,fi.length) : fi.substr(1, fi.length);
-            name = name.replace('%20', ' ');
+            let name = fi_pretty.split('.').length > 1 ? fi_pretty.substr(fi_pretty.indexOf('.') + 1, fi_pretty.length) : fi_pretty.substr(1, fi_pretty.length);
+            name = name.replace(/%20/g, ' ');
 
             // Generate keywords that will be queried
-            const keywords = fi.replace('%20', ' ').substring(1, fi.length).split('.');
+            const keywords = fi_pretty.replace(/%20/g, ' ').substring(1, fi_pretty.length).split('.');
 
             // Determine type of term
             let type;
-            if(fi.indexOf('jsonld') >= 0){
+            if (fi_pretty.indexOf('jsonld') >= 0) {
                 type = 'Context';
 
                 //If FI is jsonld context, it means the URL is of an applicationprofile (AP)
                 // So we add the name of the AP
-                let apName = url.substring(url.indexOf('applicatieprofiel')+18, url.length-1);
+                let apName = url.substring(url.indexOf('applicatieprofiel') + 18, url.length - 1);
                 keywords.push(apName);
 
                 // We also change the name of the object (otherwise its name will be 'jsonld')
@@ -383,10 +386,11 @@ async function getFragmentIdentifiersForURL(url) {
             // If we have a JSON-LD context, we need to construct the proper URL for it
             // Otherwise we construct the regular URL by preceding the FI with https://data.vlaanderen.be/...
             let URL;
-            if(type === 'Context'){
-                URL = 'https://data.vlaanderen.be/context/' + keywords[keywords.length-1] + '.jsonld';
+            if (type === 'Context') {
+                URL = 'https://data.vlaanderen.be/context/' + keywords[keywords.length - 1] + '.jsonld';
             } else {
                 URL = url + fi; // 'url' is the parameter of the function
+                                // Here we is variable 'fi' because URL needs to contain the hexidecimal numbers for points and spaces
             }
 
             fragmentIdentifiers.push(
@@ -431,11 +435,13 @@ function createKeywords(url) {
 function urlType(url) {
     let type = null;
 
-    if (url.indexOf('/applicatieprofiel') >= 0) {
+    if (url.indexOf('/standaarden/') >= 0) {
+        type = "Status in standaardenregister";
+    } else if (url.indexOf('/applicatieprofiel/') >= 0) {
         type = "Applicatieprofiel"
-    } else if (url.indexOf('/ns') >= 0) {
+    } else if (url.indexOf('/ns/') >= 0) {
         type = "Vocabularium"
-    } else if (url.indexOf('/conceptscheme') >= 0) {
+    } else if (url.indexOf('/conceptscheme/') >= 0) {
         type = "Codelijst"
     } else if (url.indexOf('/concept/') >= 0) {
         type = "Waarde van een codelijst"
@@ -450,6 +456,8 @@ function urlType(url) {
         type = "Data dumps";
     } else if (url === 'https://data.vlaanderen.be/ns') {
         type = "Namespace met alle vocabularia en applicatieprofielen";
+    } else if (url === 'https://data.vlaanderen.be/standaarden') {
+        type = "Standaardenregister";
     }
 
     return type;
