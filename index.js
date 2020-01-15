@@ -22,12 +22,18 @@ const INVALID_FRAGMENTS_IDENTIFIERS = ['#absclstract', '#sotd', '#license-and-li
 // 2. Add CRON job
 // 3. Find way to push new URLs to Elasticsearch
 
-/*try {
-    setup();
+//TODO
+// Do some tests with the update api to see what works and what not.
+//
+
+try {
+    update();
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
-}*/
+}
+
+
 
 /*
 *
@@ -58,9 +64,78 @@ function setup(){
     //generator.start();
 }
 
-// TODO
-function update(){
+/*
+*
+* This function is executed by the cron job.
+* It starts the sitemap generator, compares the old and new sitemap en pushes new URLs to Elasticsearch.
+*
+* */
+//TODO
+async function update(){
+    const newURLs = await compareToOriginalSiteMap();
+    const newIndexedURLs = convertURLsToJSON(newURLs);
+    const newIndexedFIs = await getFragmentIdentifiers(newURLs);
 
+    const client = createElasticsearchClient();
+    addDataInBulk(client, newIndexedURLs, URL_INDEX, URL_TYPE);
+    addDataInBulk(client, newIndexedFIs, FRAGMENT_IDENTIFIER_INDEX, FRAGMENT_IDENTIFIER_TYPE);
+}
+
+/*
+*
+* Compares the original sitemap to the new sitemap. New URLs are extracted and returned by this function
+* New sitemap overrides old sitemap.
+*
+* */
+async function compareToOriginalSiteMap(){
+
+    // Read original sitemap
+    let originalURLs = await new Promise(resolve => {
+        fs.readFile('./sitemap.xml',  (err, xmlString) => {
+            if (err) {
+                console.error('Error reading the sitemap.xml file');
+            }
+            Parser.parseString(xmlString.toString(), (err, res) => {
+                if (err) {
+                    console.error(err);
+                }
+
+                let urls = res.urlset.url.map(a => a.loc[0]);
+                resolve(urls);
+
+            });
+        });
+    });
+
+    // Read new sitemap
+    let update = await new Promise(resolve => {
+        fs.readFile('./sitemap-update.xml',  (err, xmlString) => {
+            if (err) {
+                console.error('Error reading the sitemap.xml file');
+            }
+            Parser.parseString(xmlString.toString(), (err, res) => {
+                if (err) {
+                    console.error(err);
+                }
+
+                resolve(res);
+
+            });
+        });
+    });
+
+    // Compare two sitemaps so that we only have to push new URLs to Elasticsearch
+    let newURLs = [];
+    update.urlset.url.forEach( url => {
+        if(!originalURLs.includes(url.loc[0])){
+            newURLs.push(url);
+        }
+    });
+
+    // Write contents of new sitemap to the original, so it becomes the new original.
+    fs.createReadStream('./sitemap-update.xml').pipe(fs.createWriteStream('./sitemap.xml'));
+
+    return newURLs;
 }
 
 
@@ -177,7 +252,7 @@ function createSitemapGenerator() {
     const generator = SitemapGenerator('https://data.vlaanderen.be', {
         stripQuerystring: true,
         ignoreHreflang: true,
-        filepath: './sitemap.xml',
+        filepath: './sitemap-update.xml',
         changeFreq: 'monthly',
         excludeURLs: ['adres', 'organisatie']   // Which patterns should be excluded
     });
