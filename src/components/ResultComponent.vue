@@ -38,8 +38,8 @@
                                 <vl-info-tile
                                         :href=result.url
                                         target="_blank"
-                                        :title=result.url
-                                        subtitle="">
+                                        :title=result.name
+                                        :subtitle=result.url>
                                     {{ result.type }}
                                 </vl-info-tile>
                                 <br>
@@ -54,17 +54,6 @@
 
 <script>
     import EventBus from '../../eventbus.js';
-
-    const VueScrollTo = require('vue-scrollto');
-
-
-    let scrollOptions = {
-        container: '#resultTitle',
-        easing: 'ease-in',
-        offset: -60,
-        force: true,
-        cancelable: true,
-    }
 
     export default {
         name: "ResultComponent",
@@ -91,7 +80,6 @@
                 this.URLResults.sort((a, b) => (a.priority > b.priority) ? 1 : -1); // Sort according priority (correctness?)
                 this.URLResults.sort((a, b) => (a.url < b.url) ? -1 : (a.url > b.url) ? 1 : 0);
 
-                //VueScrollTo.scrollTo('#resultTitle');
             },
             processFragmentIdentifierResults(results) {
                 this.fragmentIdentifierResults = [];
@@ -100,6 +88,7 @@
                     let fi = {};
                     fi.url = results[index]._source.url;
                     fi.type = results[index]._source.type;
+                    fi.name = results[index]._source.name;
                     this.fragmentIdentifierResults.push(fi);
                 }
             }

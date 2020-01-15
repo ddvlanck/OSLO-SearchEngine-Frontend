@@ -9,11 +9,13 @@
                 </vl-column>
                 <vl-column width="8" id="search_bar">
                     <vl-input-group>
-                        <vl-button disabled>Termen:</vl-button>
-                        <vl-input-field v-on:keyup.enter="executeQuery" v-model="query" id="inputfield" name="inputfield" mod-block/>
+                        <vl-button disabled>Termen</vl-button>
+                        <vl-input-field v-on:keyup.enter="executeQuery" v-model="query" id="inputfield"
+                                        name="inputfield" mod-block :mod-error="emptyOnSubmit"/>
                         <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
                                         text="Zoeken"/>
                     </vl-input-group>
+                    <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Geef 1 of meer zoektermen mee!</vl-column>
                 </vl-column>
             </vl-grid>
         </vl-layout>
@@ -21,10 +23,8 @@
 </template>
 
 <script>
-    const URL_INDEX = "data.vlaanderen";
-    const FRAGMENT_IDENTIFIER_INDEX = "data.vlaanderen_fis";
-    const URL_TYPE = "url_list";
-    const FRAGMENT_IDENTIFIER_TYPE = "fragment_identifier_list";
+
+    const config = require('../../config.js');
 
     import EventBus from '../../eventbus.js';
 
@@ -36,90 +36,105 @@
         name: "SearchComponent",
         data() {
             return {
-                query: ''
+                query: '',
+                emptyOnSubmit: false
             }
         },
         methods: {
             executeQuery() {
-                const queryTerms = this.query.split(' ');
+                document.getElementById('inputfield').blur();
 
-                let body = {
-                    size: 30,
-                    from: 0
-                };
-                if (queryTerms.length === 1) {
-                    /*body.query = {
-                        multi_match: {
-                            query: queryTerms[0],
-                            fields: ['keywords', 'type'],
-                            fuzziness: "AUTO"
+
+                if (this.query) {
+                    this.emptyOnSubmit = false;
+                    const queryTerms = this.query.split(' ');
+                    let body = {
+                        size: 30,
+                        from: 0
+                    };
+                    if (queryTerms.length === 1) {
+                        /*body.query = {
+                            multi_match: {
+                                query: queryTerms[0],
+                                fields: ['keywords', 'type'],
+                                fuzziness: "AUTO"
+                            }
+                        }*/
+                        body.query = {
+                            "query_string": {
+                                "query": '*' + queryTerms[0] + '*',
+                                "fields": ["keywords", "type"]
+                            }
                         }
-                    }*/
-                    body.query = {
-                        "query_string" : {
-                            "query" : queryTerms[0] + '*',
-                            "fields" : ["keywords", "type"]
+
+                    } else {
+                        //let musts = [];
+                        let query = "";
+                        queryTerms.forEach(term => {
+                            if (term === queryTerms[queryTerms.length - 1]) {
+                                query += '(' + term + '*)';
+                            } else {
+                                query += '(' + term + '*) AND ';
+                            }
+
+                        });
+
+                        body.query = {
+                            "query_string": {
+                                query: query,
+                                fields: ['keywords', 'type']
+                            }
                         }
+                        /*queryTerms.forEach(term => {
+                            // Search in one field
+                            let match = {
+                                keywords: term
+                            }
+                            musts.push({match : match})
+
+
+                            // Search in multiple field
+                            musts.push({multi_match : {query: term, fields: ['keywords', 'type']}})
+                        });*/
+
+                        /*body.query = {
+                            "bool" : musts
+                        }*/
+                        /*body.query = {
+                            "bool" : {
+                                "must" : musts
+                            }
+                        }*/
+
                     }
 
+                    // Search Elasticsearch URL index
+                    client.search({index: config.URL_INDEX, body: body, type: config.URL_TYPE})
+                        .then(results => {
+                            EventBus.$emit('url_results', results.hits.hits);
+                        })
+                        .catch(err => {
+                            console.log(err)
+                        });
+
+                    // Search Elasticsearch fragment index
+                    client.search({
+                        index: config.FRAGMENT_IDENTIFIER_INDEX,
+                        body: body,
+                        type: config.FRAGMENT_IDENTIFIER_TYPE
+                    })
+                        .then(results => {
+                            EventBus.$emit('fragment_identifier_results', results.hits.hits);
+                        })
+                        .catch(err => {
+                            console.log(err);
+                        })
                 } else {
-                    //let musts = [];
-                    let query = "";
-                    queryTerms.forEach( term => {
-                        if(term === queryTerms[queryTerms.length-1]){
-                            query += '(' + term + '*)';
-                        } else {
-                            query += '(' + term + '*) AND ';
-                        }
-
-                    });
-
-                    body.query = {
-                        "query_string" : {
-                            query: query,
-                            fields: ['keywords', 'type']
-                        }
-                    }
-                    /*queryTerms.forEach(term => {
-                        // Search in one field
-                        let match = {
-                            keywords: term
-                        }
-                        musts.push({match : match})
-
-
-                        // Search in multiple field
-                        musts.push({multi_match : {query: term, fields: ['keywords', 'type']}})
-                    });*/
-
-                    /*body.query = {
-                        "bool" : musts
-                    }*/
-                    /*body.query = {
-                        "bool" : {
-                            "must" : musts
-                        }
-                    }*/
-
+                    // Show error
+                    this.emptyOnSubmit = true;
                 }
 
-                // Search Elasticsearch URL index
-                client.search({index: URL_INDEX, body: body, type: URL_TYPE})
-                    .then(results => {
-                        EventBus.$emit('url_results', results.hits.hits);
-                    })
-                    .catch(err => {
-                        console.log(err)
-                    });
 
-                // Search Elasticsearch fragment index
-                client.search({index: FRAGMENT_IDENTIFIER_INDEX, body: body, type: FRAGMENT_IDENTIFIER_TYPE})
-                    .then(results => {
-                        EventBus.$emit('fragment_identifier_results', results.hits.hits);
-                    })
-                    .catch(err => {
-                        console.log(err);
-                    })
             },
         },
         watch: {
@@ -160,8 +175,13 @@
     }
 
     .vl-input-addon {
+        transition: background-color 0.5s ease;
         border-bottom-right-radius: 10px;
         border-top-right-radius: 10px;
+    }
+
+    .vl-input-addon:hover {
+        background-color: lightgrey;
     }
 
 
