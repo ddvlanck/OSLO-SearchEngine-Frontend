@@ -15,12 +15,13 @@ const config = require('./config.js');
 //TODO
 // 1. Crawl web page of AP and vocs of 'adres' en 'organisatie'
 // 2. PDF files are discovered but not added to the sitemap.xml file
-// 5. Dockerize the project
-// 6. Store data in a semantic (triples) way in Elasticsearch
+// 3. Dockerize the project
+// 4. Store data in a semantic (triples) way in Elasticsearch
 
 
 try {
-    setup();
+    //setup();
+    addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
     // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
     //cron.schedule("0 0 1 */1 *", function() {
     //    update();
@@ -188,26 +189,6 @@ function createElasticsearchIndex(client, name) {
             console.log("Created a new index: " + name, response);
         }
     });
-}
-
-function elasticsearchIndexExists(client, index) {
-    try {
-        let exists = false;
-
-        client.cat.indices({format: 'json'}).then(result => {
-
-
-            for (let i in result) {
-                if (result[i].index === index) {
-                    exists = true;
-                }
-            }
-        });
-
-        return exists;
-    } catch (e) {
-        console.error('Something went wrong when checking if index exists');
-    }
 }
 
 /*
@@ -466,8 +447,26 @@ function urlType(url) {
     return type;
 }
 
-function addToSitemap(urls){
+async function addToSitemap(urls){
+
+    let content = '';
     urls.forEach( url => {
-        // TODO: write to sitemap
-    })
+        content +=
+            '\n  <url>\n' +
+            '    <loc>' + url +'</loc>\n' +
+            '    <changefreq>yearly</changefreq>\n' +
+            '    <priority>0.5</priority>\n' +
+            '  </url>';
+    });
+
+    let fileName = 'sitemap-test.xml',
+        buffer = Buffer.from(content+'\n'+'</urlset>'),
+        fileSize = fs.statSync(fileName)['size'];
+
+    fs.open(fileName, 'r+', async function(err, fd) {
+        await fs.write(fd, buffer, 0, buffer.length, fileSize-10, function(err) {
+            if (err) throw err
+            console.log('done');
+        })
+    });
 }
