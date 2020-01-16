@@ -19,7 +19,8 @@ import {
   VlCheckbox,
   VlInfoTile,
   VlTabs,
-  VlTab
+  VlTab,
+  VlPill
 } from '@govflanders/vl-ui-vue-components';
 
 Vue.component('vl-title', VlTitle);
@@ -36,6 +37,7 @@ Vue.component('vl-checkbox', VlCheckbox);
 Vue.component('vl-info-tile', VlInfoTile);
 Vue.component('vl-tabs', VlTabs);
 Vue.component('vl-tab', VlTab);
+Vue.component('vl-pill', VlPill);
 
 Vue.use(VlCore);
 Vue.use(VlUtil);

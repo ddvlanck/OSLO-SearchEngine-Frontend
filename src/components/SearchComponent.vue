@@ -15,7 +15,7 @@
                         <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
                                         text="Zoeken"/>
                     </vl-input-group>
-                    <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Geef 1 of meer zoektermen mee!</vl-column>
+                    <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Gelieve 1 of meer zoektermen mee te geven.</vl-column>
                 </vl-column>
             </vl-grid>
         </vl-layout>
@@ -42,33 +42,21 @@
         },
         methods: {
             executeQuery() {
-                document.getElementById('inputfield').blur();
-
+                document.getElementById('inputfield').blur();   // Remove focus from input field
 
                 if (this.query) {
                     this.emptyOnSubmit = false;
                     const queryTerms = this.query.split(' ');
-                    let body = {
-                        size: 30,
-                        from: 0
-                    };
+
+                    let body = {};
                     if (queryTerms.length === 1) {
-                        /*body.query = {
-                            multi_match: {
-                                query: queryTerms[0],
-                                fields: ['keywords', 'type'],
-                                fuzziness: "AUTO"
-                            }
-                        }*/
                         body.query = {
                             "query_string": {
-                                "query": '*' + queryTerms[0] + '*',
+                                "query": queryTerms[0] + '*',
                                 "fields": ["keywords", "type"]
                             }
                         }
-
                     } else {
-                        //let musts = [];
                         let query = "";
                         queryTerms.forEach(term => {
                             if (term === queryTerms[queryTerms.length - 1]) {
@@ -85,28 +73,10 @@
                                 fields: ['keywords', 'type']
                             }
                         }
-                        /*queryTerms.forEach(term => {
-                            // Search in one field
-                            let match = {
-                                keywords: term
-                            }
-                            musts.push({match : match})
-
-
-                            // Search in multiple field
-                            musts.push({multi_match : {query: term, fields: ['keywords', 'type']}})
-                        });*/
-
-                        /*body.query = {
-                            "bool" : musts
-                        }*/
-                        /*body.query = {
-                            "bool" : {
-                                "must" : musts
-                            }
-                        }*/
-
                     }
+
+                    body.size = 50;
+                    body.from = 0;
 
                     // Search Elasticsearch URL index
                     client.search({index: config.URL_INDEX, body: body, type: config.URL_TYPE})
@@ -130,7 +100,7 @@
                             console.log(err);
                         })
                 } else {
-                    // Show error
+                    // Show error when input field is empty
                     this.emptyOnSubmit = true;
                 }
 
