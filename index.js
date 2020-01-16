@@ -13,7 +13,10 @@ const cron = require("node-cron");
 const config = require('./config.js');
 
 //TODO
-// 1. Crawl web page of AP and vocs of adres en organisatie
+// 1. Crawl web page of AP and vocs of 'adres' en 'organisatie'
+// 2. PDF files are discovered but not added to the sitemap.xml file
+// 5. Dockerize the project
+// 6. Store data in a semantic (triples) way in Elasticsearch
 
 
 try {
@@ -461,4 +464,10 @@ function urlType(url) {
     }
 
     return type;
+}
+
+function addToSitemap(urls){
+    urls.forEach( url => {
+        // TODO: write to sitemap
+    })
 }
