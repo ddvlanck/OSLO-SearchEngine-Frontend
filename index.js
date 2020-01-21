@@ -1,6 +1,6 @@
 // Elasticsearch data and index creation
 
-const SitemapGenerator = require('advanced-sitemap-generator');
+const SitemapGenerator = require('sitemap-generator');
 const xml2js = require('xml2js');
 const fs = require('fs');
 const Parser = new xml2js.Parser({attrkey: "ATTR"});
@@ -21,7 +21,7 @@ const config = require('./config.js');
 
 try {
     //setup();
-    addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
+    //addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
     // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
     //cron.schedule("0 0 1 */1 *", function() {
     //    update();
@@ -417,8 +417,10 @@ function createKeywords(url) {
 *
 * */
 function urlType(url) {
-    let type = null;
+    let type = "Pagina of document";    // Each URL is a page or document
 
+
+    // Check if we can add a more detailed type
     if (url.indexOf('/standaarden/') >= 0) {
         type = "Status in standaardenregister";
     } else if (url.indexOf('/applicatieprofiel/') >= 0) {
@@ -429,11 +431,9 @@ function urlType(url) {
         type = "Codelijst"
     } else if (url.indexOf('/concept/') >= 0) {
         type = "Waarde van een codelijst"
-    } else {
-        type = "Pagina of document";
     }
 
-    // Specific web pages
+    // Specific Web pages
     if (url === 'https://data.vlaanderen.be/') {
         type = "Hoofdpagina"
     } else if (url === 'https://data.vlaanderen.be/dumps') {

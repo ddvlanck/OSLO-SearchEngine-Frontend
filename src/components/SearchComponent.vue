@@ -7,7 +7,7 @@
                         OSLO Zoekmachine
                     </vl-title>
                 </vl-column>
-                <vl-column width="8" id="search_bar">
+                <vl-column width="7" id="search_bar">
                     <vl-input-group>
                         <vl-button disabled>Termen</vl-button>
                         <vl-input-field v-on:keyup.enter="executeQuery" v-model="query" id="inputfield"
@@ -15,7 +15,14 @@
                         <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
                                         text="Zoeken"/>
                     </vl-input-group>
-                    <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Gelieve 1 of meer zoektermen mee te geven.</vl-column>
+                    <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Gelieve 1 of meer zoektermen mee te
+                        geven.
+                    </vl-column>
+                </vl-column>
+                <vl-column v-if="error" style="color: #ff3232">
+                    <vl-title tag-name="h4">
+                        Sorry, er ging iets mis bij het opzoeken van "{{query}}". Probeer het later nog eens opnieuw.
+                    </vl-title>
                 </vl-column>
             </vl-grid>
         </vl-layout>
@@ -37,7 +44,8 @@
         data() {
             return {
                 query: '',
-                emptyOnSubmit: false
+                emptyOnSubmit: false,
+                error: false
             }
         },
         methods: {
@@ -46,6 +54,7 @@
 
                 if (this.query) {
                     this.emptyOnSubmit = false;
+                    this.error = false;
                     const queryTerms = this.query.split(' ');
 
                     let body = {};
@@ -84,7 +93,7 @@
                             EventBus.$emit('url_results', results.hits.hits);
                         })
                         .catch(err => {
-                            console.log(err)
+                            this.error = true;
                         });
 
                     // Search Elasticsearch fragment index
@@ -97,7 +106,10 @@
                             EventBus.$emit('fragment_identifier_results', results.hits.hits);
                         })
                         .catch(err => {
-                            console.log(err);
+                            this.error = true;
+                            setTimeout(() => {
+                                this.error = false;
+                            }, 5000);
                         })
                 } else {
                     // Show error when input field is empty
