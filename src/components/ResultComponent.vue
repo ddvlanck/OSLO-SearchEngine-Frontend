@@ -40,6 +40,7 @@
                         </vl-tab>
                     </vl-tabs>
                 </vl-column>
+                <go-top :bottom="50" :right="100" :size="40" :has-outline="false" bg-color="#306ccf" fg-color="#ffffff"></go-top>
             </vl-grid>
         </vl-layout>
     </div>
@@ -47,6 +48,7 @@
 
 <script>
     import EventBus from '../../eventbus.js';
+
 
     export default {
         name: "ResultComponent",

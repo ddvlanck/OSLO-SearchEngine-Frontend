@@ -39,8 +39,12 @@ Vue.component('vl-tabs', VlTabs);
 Vue.component('vl-tab', VlTab);
 Vue.component('vl-pill', VlPill);
 
+
 Vue.use(VlCore);
 Vue.use(VlUtil);
+
+import GoTop from '@inotom/vue-go-top';
+Vue.component('go-top', GoTop);
 
 new Vue({
   render: h => h(App),

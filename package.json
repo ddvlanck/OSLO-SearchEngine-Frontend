@@ -19,6 +19,7 @@
     "@govflanders/vl-ui-tabs": "^3.10.7",
     "@govflanders/vl-ui-titles": "^3.10.5",
     "@govflanders/vl-ui-vue-components": "^3.10.3-beta.0",
+    "@inotom/vue-go-top": "^1.2.0",
     "advanced-sitemap-generator": "^1.6.9",
     "core-js": "^3.4.3",
     "elasticsearch": "^16.5.0",
