@@ -1,6 +1,6 @@
 // Elasticsearch data and index creation
 
-const SitemapGenerator = require('sitemap-generator');
+const SitemapGenerator = require('advanced-sitemap-generator');
 const xml2js = require('xml2js');
 const fs = require('fs');
 const Parser = new xml2js.Parser({attrkey: "ATTR"});
@@ -9,6 +9,7 @@ require('es6-promise').polyfill();
 require('isomorphic-fetch');
 const getHrefs = require('get-hrefs');
 const cron = require("node-cron");
+const XMLWriter = require('xml-writer');
 
 const config = require('./config.js');
 
@@ -20,6 +21,7 @@ const config = require('./config.js');
 
 
 try {
+    test();
     //setup();
     //addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
     // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
@@ -30,6 +32,10 @@ try {
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
+}
+
+function test(){
+    deleteIdentifierURLs(config.ORIGINAL_SITEMAP);
 }
 
 
@@ -43,9 +49,10 @@ function setup() {
     const generator = createSitemapGenerator(config.ORIGINAL_SITEMAP);
 
     generator.on('done', async () => {
+        await deleteIdentifierURLs(config.ORIGINAL_SITEMAP);
 
         // Index the sitemap
-        let [indexed_urls, indexed_fis] = await indexData();
+        /*let [indexed_urls, indexed_fis] = await indexData();
 
         // Create Elasticsearch client and an index
         const client = createElasticsearchClient();
@@ -55,7 +62,7 @@ function setup() {
 
         // Add data in bulk mode to Elasticsearch
         addDataInBulk(client, indexed_urls, config.URL_INDEX, config.URL_TYPE);
-        addDataInBulk(client, indexed_fis, config.FRAGMENT_IDENTIFIER_INDEX, config.FRAGMENT_IDENTIFIER_TYPE);
+        addDataInBulk(client, indexed_fis, config.FRAGMENT_IDENTIFIER_INDEX, config.FRAGMENT_IDENTIFIER_TYPE);*/
 
     });
 
@@ -72,6 +79,7 @@ async function update() {
     const generator = createSitemapGenerator(config.UPDATE_SITEMAP);
 
     generator.on('done', async () => {
+        await deleteIdentifierURLs(config.UPDATE_SITEMAP);
         const newURLs = await compareToOriginalSiteMap();
         const newIndexedURLs = convertURLsToJSON(newURLs);
         const newIndexedFIs = await getFragmentIdentifiers(newURLs);
@@ -84,71 +92,29 @@ async function update() {
     generator.start();
 }
 
+
 /*
-*
-* Compares the original sitemap to the new sitemap. New URLs are extracted and returned by this function
-* New sitemap overrides old sitemap.
-*
+* Creates a generator instance to create a sitemap.xml file
 * */
-async function compareToOriginalSiteMap() {
+function createSitemapGenerator(filename) {
 
-    // Read original sitemap
-    let originalURLs = await new Promise(resolve => {
-        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
-            if (err) {
-                console.error('Error reading the sitemap.xml file');
-            }
-            Parser.parseString(xmlString.toString(), (err, res) => {
-                if (err) {
-                    console.error(err);
-                }
-
-                let urls = res.urlset.url.map(a => a.loc[0]);
-                resolve(urls);
-
-            });
-        });
+    // Create sitemap generator for data.vlaanderen.be
+    const generator = SitemapGenerator('https://data.vlaanderen.be', {
+        stripQuerystring: true,
+        ignoreHreflang: true,
+        filepath: filename,
+        changeFreq: 'monthly',
+        excludeURLs: ['/doc/adres', '/doc/organisatie', '/id/adres', '/id/organisatie']   // Which patterns should be excluded
     });
+    // Since we exclude patterns with 'adres' and 'organisatie' to prevent we crawl the address and organization register (datasets)
+    // We have to add their application profiles and vocs manually.
 
-    // Read new sitemap
-    let update = await new Promise(resolve => {
-        fs.readFile(config.UPDATE_SITEMAP, (err, xmlString) => {
-            if (err) {
-                console.error('Error reading the sitemap.xml file');
-            }
-            Parser.parseString(xmlString.toString(), (err, res) => {
-                if (err) {
-                    console.error(err);
-                }
-
-                resolve(res);
-
-            });
-        });
-    });
-
-    // Compare two sitemaps so that we only have to push new URLs to Elasticsearch
-    let newURLs = [];
-    update.urlset.url.forEach(url => {
-        if (!originalURLs.includes(url.loc[0])) {
-            newURLs.push(url);
-        }
-    });
-
-    // Write contents of new sitemap to the original, so it becomes the new original.
-    fs.createReadStream(config.UPDATE_SITEMAP).pipe(fs.createWriteStream(config.ORIGINAL_SITEMAP));
-
-    // Delete the sitemap-update.xml file
-    //fs.unlinkSync('./sitemap-update.xml');
-
-    return newURLs;
+    return generator;
 }
 
 
 /*
-*
 * Called in the main method and CRON job to create an Elasticsearch client
-*
 * */
 function createElasticsearchClient() {
     console.log('\x1b[33m%s\x1b[0m ', "Creating an Elasticsearch client.");
@@ -227,37 +193,14 @@ function addDataInBulk(client, data, index, type) {
 
 }
 
-/*
-*
-* Creates a generator instance to create a sitemap.xml file
-*
-* */
-function createSitemapGenerator(filename) {
-
-    // Create sitemap generator for data.vlaanderen.be
-    const generator = SitemapGenerator('https://data.vlaanderen.be', {
-        stripQuerystring: true,
-        ignoreHreflang: true,
-        filepath: filename,
-        changeFreq: 'monthly',
-        excludeURLs: ['adres', 'organisatie']   // Which patterns should be excluded
-    });
-    // Since we exclude patterns with 'adres' and 'organisatie' to prevent we crawl the address and organization register (datasets)
-    // We have to add their application profiles and vocs manually.
-
-    return generator;
-}
-
 
 /*
-*
 * Reads all URLs from the sitemap.xml file and executes two functions.
 * The first function converts to URLs to JSON objects with metadata.
 * The second function gets all the fragment identifiers present in the HTML body of the URL
-*
 * */
 async function indexData() {
-    let data = await new Promise(resolve => {
+    /*let data = await new Promise(resolve => {
         fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
             if (err) {
                 console.error('Error reading the sitemap.xml file');
@@ -271,12 +214,76 @@ async function indexData() {
 
             });
         });
-    });
+    });*/
+    const data = await XMLToJSON(config.ORIGINAL_SITEMAP);
 
     let indexedURLs = convertURLsToJSON(data.urlset.url);
     let indexedFIs = await getFragmentIdentifiers(data.urlset.url);
 
     return [indexedURLs, indexedFIs];
+}
+
+/*
+* Compares the original sitemap to the new sitemap. New URLs are extracted and returned by this function
+* New sitemap overrides old sitemap.
+* */
+async function compareToOriginalSiteMap() {
+    let originalURLs = await XMLToJSON(config.ORIGINAL_SITEMAP);
+    originalURLs = originalURLs.urlset.url.map(a => a.loc[0]);
+
+    // Read original sitemap
+    /*let originalURLs = await new Promise(resolve => {
+        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
+            if (err) {
+                console.error('Error reading the sitemap.xml file');
+            }
+            Parser.parseString(xmlString.toString(), (err, res) => {
+                if (err) {
+                    console.error(err);
+                }
+
+                let urls = res.urlset.url.map(a => a.loc[0]);
+                resolve(urls);
+
+            });
+        });
+    });*/
+
+    let update = await XMLToJSON(config.UPDATE_SITEMAP);
+
+
+    // Read new sitemap
+    /*let update = await new Promise(resolve => {
+        fs.readFile('sitemap-test.xml', (err, xmlString) => {
+            if (err) {
+                console.error('Error reading the updated sitemap.xml file');
+            }
+            Parser.parseString(xmlString.toString(), (err, res) => {
+                if (err) {
+                    console.error(err);
+                }
+
+                resolve(res);
+
+            });
+        });
+    });*/
+
+    // Compare two sitemaps so that we only have to push new URLs to Elasticsearch
+    let newURLs = [];
+    update.urlset.url.forEach(url => {
+        if (!originalURLs.includes(url.loc[0])) {
+            newURLs.push(url);
+        }
+    });
+
+    // Write contents of new sitemap to the original, so it becomes the new original.
+    //fs.createReadStream(config.UPDATE_SITEMAP).pipe(fs.createWriteStream(config.ORIGINAL_SITEMAP));
+
+    // Delete the sitemap-update.xml file
+    //fs.unlinkSync('./sitemap-update.xml');
+
+    //return newURLs;
 }
 
 /*
@@ -301,10 +308,8 @@ function convertURLsToJSON(urls) {
 }
 
 /*
-*
 * Gets all fragment identifiers for the list of URLs
 * @params {urls}: list of objects containing the URLs (output from XML converter)
-*
 * */
 async function getFragmentIdentifiers(urls) {
     let FIs = [];
@@ -316,7 +321,6 @@ async function getFragmentIdentifiers(urls) {
 }
 
 /*
-*
 * Actual function that retrieves the fragment identifiers present in the HTML body of the URL
 * Creates an array of JSON objects containing the fragment identifier and information about the identifier.
 * @params {url} : a URL
@@ -391,10 +395,8 @@ async function getFragmentIdentifiersForURL(url) {
 }
 
 /*
-*
 * Creates the keywords for the URL that will be pushed to Elasticsearch
 * @param {url}: a URL
-*
 * */
 function createKeywords(url) {
     // Remove the base domain and use other parts as keywords
@@ -411,10 +413,8 @@ function createKeywords(url) {
 }
 
 /*
-*
 * Determines the type of the URL and will be added as metadata to the corresponding JSON object
 * @param {url}: a URL
-*
 * */
 function urlType(url) {
     let type = "Pagina of document";    // Each URL is a page or document
@@ -447,26 +447,51 @@ function urlType(url) {
     return type;
 }
 
-async function addToSitemap(urls){
+/*
+* Deletes all the URLs that have /id/ in their path. We can't exclude these URLs in the generator because otherwise URLs that need to be in the sitemap
+* are not. So we remove them here and rewrite the sitemap.
+* @params {sitemap}: name of the XML sitemap whose identifiers URLs are to be deleted
+* */
+async function deleteIdentifierURLs(sitemap){
+    let URLs = await XMLToJSON(sitemap);
 
-    let content = '';
-    urls.forEach( url => {
-        content +=
-            '\n  <url>\n' +
-            '    <loc>' + url +'</loc>\n' +
-            '    <changefreq>yearly</changefreq>\n' +
-            '    <priority>0.5</priority>\n' +
-            '  </url>';
-    });
+    const xw = new XMLWriter(true);
+    xw.startDocument();
+    xw.startElement('urlset');
 
-    let fileName = 'sitemap-test.xml',
-        buffer = Buffer.from(content+'\n'+'</urlset>'),
-        fileSize = fs.statSync(fileName)['size'];
+    for(let i = 0; i < URLs.urlset.url.length ; i++){
+        if(URLs.urlset.url[i].loc[0].indexOf('/id/') < 0){
+            xw.startElement('url')
+                .writeElement('loc', URLs.urlset.url[i].loc[0])
+                .writeElement('changefreq', URLs.urlset.url[i].changefreq[0])
+                .writeElement('priority', URLs.urlset.url[i].priority[0])
+                .writeElement('lastmod', URLs.urlset.url[i].lastmod[0]);
+            xw.endElement();
+        }
+    }
+    xw.endDocType();
+    fs.createWriteStream(sitemap).write(xw.toString());
+}
 
-    fs.open(fileName, 'r+', async function(err, fd) {
-        await fs.write(fd, buffer, 0, buffer.length, fileSize-10, function(err) {
-            if (err) throw err
-            console.log('done');
-        })
+/*
+* Function that converts XML data to JSON data
+* @params {sitemap}: name of the XML sitemap whose data is to be converted
+* */
+function XMLToJSON(sitemap){
+    return new Promise(resolve => {
+        fs.readFile(sitemap, (err, xmlString) => {
+            if (err) {
+                console.error('Error reading the sitemap.xml file');
+            }
+            Parser.parseString(xmlString.toString(), (err, res) => {
+                if (err) {
+                    console.error(err);
+                }
+                resolve(res);
+
+            });
+        });
     });
 }
+
+

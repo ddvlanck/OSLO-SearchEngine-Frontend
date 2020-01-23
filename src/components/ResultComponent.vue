@@ -71,9 +71,6 @@
                     this.URLResults.push(result);
                 }
 
-                // TODO : test this
-                this.URLResults.sort((a, b) => (a.priority > b.priority) ? 1 : -1); // Sort according priority (correctness?)
-                this.URLResults.sort((a, b) => (a.url < b.url) ? -1 : (a.url > b.url) ? 1 : 0);
 
             },
             processFragmentIdentifierResults(results) {
