@@ -14,14 +14,10 @@ const XMLWriter = require('xml-writer');
 const config = require('./config.js');
 
 //TODO
-// 1. Crawl web page of AP and vocs of 'adres' en 'organisatie'
-// 2. PDF files are discovered but not added to the sitemap.xml file
-// 3. Dockerize the project
-// 4. Store data in a semantic (triples) way in Elasticsearch
-
+// 1. Dockerize the project
+// 2. Store data in a semantic (triples) way in Elasticsearch
 
 try {
-    test();
     //setup();
     //addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
     // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
@@ -32,10 +28,6 @@ try {
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
-}
-
-function test(){
-    deleteIdentifierURLs(config.ORIGINAL_SITEMAP);
 }
 
 
@@ -49,13 +41,13 @@ function setup() {
     const generator = createSitemapGenerator(config.ORIGINAL_SITEMAP);
 
     generator.on('done', async () => {
-        await deleteIdentifierURLs(config.ORIGINAL_SITEMAP);
+        //await deleteIdentifierURLs(config.ORIGINAL_SITEMAP);
 
         // Index the sitemap
-        /*let [indexed_urls, indexed_fis] = await indexData();
+        let [indexed_urls, indexed_fis] = await indexData();
 
         // Create Elasticsearch client and an index
-        const client = createElasticsearchClient();
+        /*const client = createElasticsearchClient();
         createElasticsearchIndex(client, config.URL_INDEX);
         createElasticsearchIndex(client, config.FRAGMENT_IDENTIFIER_INDEX);
 
@@ -200,21 +192,6 @@ function addDataInBulk(client, data, index, type) {
 * The second function gets all the fragment identifiers present in the HTML body of the URL
 * */
 async function indexData() {
-    /*let data = await new Promise(resolve => {
-        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
-            if (err) {
-                console.error('Error reading the sitemap.xml file');
-            }
-            Parser.parseString(xmlString.toString(), (err, res) => {
-                if (err) {
-                    console.error(err);
-                }
-
-                resolve(res);
-
-            });
-        });
-    });*/
     const data = await XMLToJSON(config.ORIGINAL_SITEMAP);
 
     let indexedURLs = convertURLsToJSON(data.urlset.url);
@@ -229,61 +206,39 @@ async function indexData() {
 * */
 async function compareToOriginalSiteMap() {
     let originalURLs = await XMLToJSON(config.ORIGINAL_SITEMAP);
-    originalURLs = originalURLs.urlset.url.map(a => a.loc[0]);
+    const convertedOriginalURLs = originalURLs.urlset.url.map(a => a.loc[0]);
 
-    // Read original sitemap
-    /*let originalURLs = await new Promise(resolve => {
-        fs.readFile(config.ORIGINAL_SITEMAP, (err, xmlString) => {
-            if (err) {
-                console.error('Error reading the sitemap.xml file');
-            }
-            Parser.parseString(xmlString.toString(), (err, res) => {
-                if (err) {
-                    console.error(err);
-                }
-
-                let urls = res.urlset.url.map(a => a.loc[0]);
-                resolve(urls);
-
-            });
-        });
-    });*/
-
-    let update = await XMLToJSON(config.UPDATE_SITEMAP);
-
-
-    // Read new sitemap
-    /*let update = await new Promise(resolve => {
-        fs.readFile('sitemap-test.xml', (err, xmlString) => {
-            if (err) {
-                console.error('Error reading the updated sitemap.xml file');
-            }
-            Parser.parseString(xmlString.toString(), (err, res) => {
-                if (err) {
-                    console.error(err);
-                }
-
-                resolve(res);
-
-            });
-        });
-    });*/
+    let update = await XMLToJSON('test.xml');
 
     // Compare two sitemaps so that we only have to push new URLs to Elasticsearch
     let newURLs = [];
     update.urlset.url.forEach(url => {
-        if (!originalURLs.includes(url.loc[0])) {
+        if (!convertedOriginalURLs.includes(url.loc[0])) {
+            originalURLs.push(url);
             newURLs.push(url);
         }
     });
 
-    // Write contents of new sitemap to the original, so it becomes the new original.
-    //fs.createReadStream(config.UPDATE_SITEMAP).pipe(fs.createWriteStream(config.ORIGINAL_SITEMAP));
+    // Write originalData (which can be updated) back to sitemap.xml
+    const xw = new XMLWriter(true);
+    xw.startDocument('1.0', 'UTF-8', 'yes');
+    xw.startElement('urlset');
+
+    for (let i = 0; i < URLs.urlset.url.length; i++) {
+        xw.startElement('url')
+            .writeElement('loc', URLs.urlset.url[i].loc[0])
+            .writeElement('changefreq', URLs.urlset.url[i].changefreq[0])
+            .writeElement('priority', URLs.urlset.url[i].priority[0])
+            .writeElement('lastmod', URLs.urlset.url[i].lastmod[0]);
+        xw.endElement();
+    }
+    xw.endDocType();
+    fs.createWriteStream(config.ORIGINAL_SITEMAP).write(xw.toString());
 
     // Delete the sitemap-update.xml file
-    //fs.unlinkSync('./sitemap-update.xml');
+    fs.unlinkSync('./sitemap-update.xml');
 
-    //return newURLs;
+    return newURLs;
 }
 
 /*
@@ -419,7 +374,6 @@ function createKeywords(url) {
 function urlType(url) {
     let type = "Pagina of document";    // Each URL is a page or document
 
-
     // Check if we can add a more detailed type
     if (url.indexOf('/standaarden/') >= 0) {
         type = "Status in standaardenregister";
@@ -451,16 +405,22 @@ function urlType(url) {
 * Deletes all the URLs that have /id/ in their path. We can't exclude these URLs in the generator because otherwise URLs that need to be in the sitemap
 * are not. So we remove them here and rewrite the sitemap.
 * @params {sitemap}: name of the XML sitemap whose identifiers URLs are to be deleted
+*
+* NOTE: in this function also wrong URLs are deleted.
+* Apparently wrong URLs are formed by the sitemap-generator, e.g. https://data.vlaanderen.be/ns/www.cipalschoubroek.be
+* These URLs need to be removed
 * */
-async function deleteIdentifierURLs(sitemap){
+async function deleteIdentifierURLs(sitemap) {
     let URLs = await XMLToJSON(sitemap);
 
     const xw = new XMLWriter(true);
     xw.startDocument();
     xw.startElement('urlset');
 
-    for(let i = 0; i < URLs.urlset.url.length ; i++){
-        if(URLs.urlset.url[i].loc[0].indexOf('/id/') < 0){
+    for (let i = 0; i < URLs.urlset.url.length; i++) {
+        let URL = URLs.urlset.url[i].loc[0];
+
+        if (URL.indexOf('/id/') < 0 && URL.substring(URL.lastIndexOf('/'), URL.length).indexOf('www.') < 0) {
             xw.startElement('url')
                 .writeElement('loc', URLs.urlset.url[i].loc[0])
                 .writeElement('changefreq', URLs.urlset.url[i].changefreq[0])
@@ -477,7 +437,7 @@ async function deleteIdentifierURLs(sitemap){
 * Function that converts XML data to JSON data
 * @params {sitemap}: name of the XML sitemap whose data is to be converted
 * */
-function XMLToJSON(sitemap){
+function XMLToJSON(sitemap) {
     return new Promise(resolve => {
         fs.readFile(sitemap, (err, xmlString) => {
             if (err) {
