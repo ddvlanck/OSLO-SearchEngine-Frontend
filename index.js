@@ -1,12 +1,11 @@
 // Elasticsearch data and index creation
-
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
 const SitemapGenerator = require('advanced-sitemap-generator');
 const xml2js = require('xml2js');
 const fs = require('fs');
 const Parser = new xml2js.Parser({attrkey: "ATTR"});
 const elasticsearch = require('elasticsearch');
-require('es6-promise').polyfill();
-require('isomorphic-fetch');
 const getHrefs = require('get-hrefs');
 const cron = require("node-cron");
 const XMLWriter = require('xml-writer');

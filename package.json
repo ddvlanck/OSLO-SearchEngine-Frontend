@@ -39,7 +39,6 @@
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.1.0",
     "@vue/cli-service": "^4.1.0",
-    "jest": "^25.1.0",
     "vue-template-compiler": "^2.6.10"
   },
   "browserslist": [
