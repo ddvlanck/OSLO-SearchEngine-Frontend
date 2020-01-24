@@ -17,6 +17,7 @@ const config = require('./config.js');
 // 2. Store data in a semantic (triples) way in Elasticsearch
 
 try {
+    test();
     //setup();
     //addToSitemap(['https://data.vlaanderen.be/ns/adres', 'https://data.vlaanderen.be/doc/applicatieprofiel/adresregister/']);
     // cron job is executed: “At 00:00 on day-of-month 1 in every month.”
@@ -27,6 +28,20 @@ try {
 } catch (e) {
     console.error('Something went wrong!');
     console.log(e);
+}
+
+async function test(){
+    let [indexed_urls, indexed_fis] = await indexData();
+
+    // Create Elasticsearch client and an index
+    const client = createElasticsearchClient();
+    createElasticsearchIndex(client, config.URL_INDEX);
+    createElasticsearchIndex(client, config.FRAGMENT_IDENTIFIER_INDEX);
+
+
+    // Add data in bulk mode to Elasticsearch
+    addDataInBulk(client, indexed_urls, config.URL_INDEX, config.URL_TYPE);
+    addDataInBulk(client, indexed_fis, config.FRAGMENT_IDENTIFIER_INDEX, config.FRAGMENT_IDENTIFIER_TYPE);
 }
 
 
@@ -328,7 +343,18 @@ async function getFragmentIdentifiersForURL(url) {
             // Otherwise we construct the regular URL by preceding the FI with https://data.vlaanderen.be/...
             let URL;
             if (type === 'Context') {
-                URL = 'https://data.vlaanderen.be/context/' + keywords[keywords.length - 1] + '.jsonld';
+
+                // We must take into account the two version of the toolchain.
+                // For the new version of the toolchain, the URI structure is different
+
+                // For the OLD version, URLs end with '/'
+                if(url.charAt(url.length) === '/'){
+                    URL = 'https://data.vlaanderen.be/context/' + keywords[keywords.length - 1] + '.jsonld';
+                } else {
+                    URL = url + 'context/' + keywords[keywords.length - 1] + '.jsonld'
+                }
+
+
             } else {
                 URL = url + fi; // 'url' is the parameter of the function
                                 // Here we is variable 'fi' because URL needs to contain the hexidecimal numbers for points and spaces
@@ -340,7 +366,7 @@ async function getFragmentIdentifiersForURL(url) {
                     keywords: keywords,
                     type: type,
                     name: name
-                })
+                });
         }
     });
 
