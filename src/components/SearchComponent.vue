@@ -2,7 +2,7 @@
     <div>
         <vl-layout>
             <vl-grid mod-stacked>
-                <vl-column>
+                <vl-column id="title">
                     <vl-title tag-name="h1">
                         OSLO Zoekmachine
                     </vl-title>
@@ -14,6 +14,7 @@
                                         name="inputfield" mod-block :mod-error="emptyOnSubmit"/>
                         <vl-input-addon @click="executeQuery" tag-name="button" tooltip="" type="button" icon="search"
                                         text="Zoeken"/>
+                        <a href="#" title="Help mij!" id="info-modal-link" v-vl-modal-toggle="'info-modal'"><vl-icon icon="question-mark" mod-after></vl-icon></a>
                     </vl-input-group>
                     <vl-column v-if="emptyOnSubmit" width="8" style="color: red">Gelieve 1 of meer zoektermen mee te
                         geven.
@@ -26,6 +27,16 @@
                 </vl-column>
             </vl-grid>
         </vl-layout>
+        <vl-modal
+                closable
+                id="info-modal"
+                title="Wat kan ik opzoeken?">
+            De zoekmachine bied je de mogelijkheid om verschillende zaken op te zoeken. Zo kan je op zoek zijn naar een specifiek <strong>vocabularium</strong>
+            of <strong>applicatieprofiel</strong>. Misschien ben je wel op zoek naar de Vlaamse URI-standaard of zoek je gewoon een <strong>specifieke klasse</strong>
+            of een <strong>eigenschap</strong> in een applicatieprofiel.
+            <br><br>
+            Samengevat: alle data die beschikbaar is op data.vlaanderen.be kan je hier opvragen!
+        </vl-modal>
     </div>
 </template>
 
@@ -138,6 +149,8 @@
     @import "~@govflanders/vl-ui-input-addon/src/scss/input-addon";
     @import "~@govflanders/vl-ui-util/src/scss/util";
     @import "~@govflanders/vl-ui-checkbox/src/scss/checkbox";
+    @import "~@govflanders/vl-ui-modal/src/scss/modal";
+    @import "~@govflanders/vl-ui-icon/src/scss/icon";
 
     .vl-title, #options {
         text-align: center;
@@ -164,6 +177,10 @@
 
     .vl-input-addon:hover {
         background-color: lightgrey;
+    }
+
+    #info-modal-link {
+        margin-top: 5px!important;
     }
 
 

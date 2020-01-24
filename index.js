@@ -95,7 +95,6 @@ function createSitemapGenerator(filename) {
         stripQuerystring: true,
         ignoreHreflang: true,
         filepath: filename,
-        changeFreq: 'monthly',
         excludeURLs: ['/doc/adres', '/doc/organisatie', '/id/adres', '/id/organisatie']   // Which patterns should be excluded
     });
     // Since we exclude patterns with 'adres' and 'organisatie' to prevent we crawl the address and organization register (datasets)

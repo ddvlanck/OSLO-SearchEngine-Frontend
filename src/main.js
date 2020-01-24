@@ -20,7 +20,10 @@ import {
   VlInfoTile,
   VlTabs,
   VlTab,
-  VlPill
+  VlPill,
+  VlModal,
+  VlModalToggle,
+  VlIcon
 } from '@govflanders/vl-ui-vue-components';
 
 Vue.component('vl-title', VlTitle);
@@ -38,6 +41,10 @@ Vue.component('vl-info-tile', VlInfoTile);
 Vue.component('vl-tabs', VlTabs);
 Vue.component('vl-tab', VlTab);
 Vue.component('vl-pill', VlPill);
+Vue.component('vl-modal', VlModal);
+Vue.component('vl-icon', VlIcon);
+
+Vue.directive('vl-modal-toggle', VlModalToggle);
 
 
 Vue.use(VlCore);
