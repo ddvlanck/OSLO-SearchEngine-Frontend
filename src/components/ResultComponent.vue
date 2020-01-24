@@ -75,7 +75,6 @@
             },
             processFragmentIdentifierResults(results) {
                 this.fragmentIdentifierResults = [];
-                console.log(results);
 
                 for (let index in results) {
                     let fi = {};
@@ -90,7 +89,12 @@
             // If the URL is a property, then its class and the name of the application profile will be extracted
             // IF the URL is a class, only the name of the application profile is extracted
             getParent(fiObject, keywords){
-                fiObject.apName = fiObject.url.substring(fiObject.url.indexOf('/applicatieprofiel')+19).split('/')[0];
+                if(fiObject.url.indexOf('.jsonld') >= 0){
+                    fiObject.apName = fiObject.url.substring(fiObject.url.lastIndexOf('/') + 1, fiObject.url.indexOf('.jsonld'))
+                } else {
+                    fiObject.apName = fiObject.url.substring(fiObject.url.indexOf('/applicatieprofiel')+19).split('/')[0];
+                }
+
 
                 if(fiObject.type === 'Eigenschap'){
                     fiObject.className = keywords[0];
