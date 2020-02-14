@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "node index.js && vue-cli-service build"
+    "build": "vue-cli-service build"
   },
   "dependencies": {
     "@govflanders/vl-ui-button": "^3.10.5",
@@ -22,19 +22,10 @@
     "@govflanders/vl-ui-titles": "^3.10.5",
     "@govflanders/vl-ui-vue-components": "^3.10.3-beta.0",
     "@inotom/vue-go-top": "^1.2.0",
-    "advanced-sitemap-generator": "^1.6.9",
     "core-js": "^3.4.3",
-    "elasticsearch": "^16.5.0",
-    "es6-promise": "^4.2.8",
-    "fs": "0.0.1-security",
-    "get-hrefs": "^4.0.0",
-    "isomorphic-fetch": "^2.2.1",
-    "node-cron": "^2.0.3",
     "node-sass": "^4.13.1",
     "sass-loader": "^8.0.0",
-    "vue": "^2.6.10",
-    "xml-writer": "^1.7.0",
-    "xml2js": "^0.4.23"
+    "vue": "^2.6.10"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.1.0",
