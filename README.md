@@ -11,6 +11,13 @@ De frontend van de zoekmachine zit in deze repository en werd ontwikkeld in Vue 
 Indien de gebruiker tot bovenstaande organisatie behoort, dan dient hij te navigeren naar de directory, vervolgens in te loggen bij NPM door middel van het commando `npm login`. Verder moet ook de inhoud van het bestand `.npmrc` leeggemaakt worden, anders zal er telkens een error getoond worden.
 - Het .npmrc-bestand is nodig om een docker image te kunnen maken en toegang te krijgen tot node modules uit een private registry.
 
+## Installatie
+
+```
+> npm install
+> npm run serve
+```
+
 ## Docker
 
 De gebruiker kan er ook voor kiezen om de frontend te draaien via Docker. Hiertoe moet hij eerst een docker image maken van deze repository:
