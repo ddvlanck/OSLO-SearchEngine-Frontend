@@ -1,4 +1,4 @@
-# OSLO Zoekmachine Frontend
+# OSLO Zoekmachine - Frontend
 
 De zoekmachine voor OSLO (Open Standaarden voor Linkende Organisaties) bestaat uit 3 delen:
 
